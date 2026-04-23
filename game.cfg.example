@@ -1,0 +1,14 @@
+# NES Recompiler config — example (rename to game.cfg)
+# Lines starting with # are comments.
+#
+# extra_func = <hex_addr>
+#   Force-add a function entry point (for dispatch table targets,
+#   state machine handlers, etc. not reachable via static BFS)
+#
+# data_region = <hex_start>,<hex_end>
+#   Mark a range as data (prevents decoder from treating it as code)
+#
+# Example:
+#   extra_func = E4A0
+#   extra_func = E502
+#   data_region = C100,C200

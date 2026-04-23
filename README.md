@@ -1,57 +1,94 @@
-# NESRecomp for MinGW 🎮
+# NES Static Recompiler
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![NESRecomp](https://img.shields.io/badge/Base-NESRecomp%20by%20mstan-blue)](https://github.com/mstan/nesrecomp)
+Конвертирует `.nes` ROM → C-код → нативный exe на Windows (MinGW).  
+**Не эмулятор** — каждая инструкция 6502 транслируется в C один раз при сборке.
 
-**Static recompilation of NES games to native code without Visual Studio!**
+```
+game.nes
+  ↓  python recompiler/nesrecomp.py
+generated/<game>_full.c       ← все функции 6502→C
+generated/<game>_dispatch.c   ← call_by_address() + nes_reset/nmi/irq
+  ↓  mingw32-make GAME=<game>
+bin/nesrecomp.exe
+```
 
-This is a fork of [NESRecomp](https://github.com/mstan/nesrecomp), adapted for building with **MinGW-w64** and **Makefile**.
+## Требования
 
-> **All adaptation work was done in dialogue with Claude AI (Anthropic).**
-> The code is completely open source. Doesn't require Visual Studio.
+- **MSYS2 / MinGW-w64**
+- `gcc`, `mingw32-make`
+- **SDL2** для MinGW: `pacman -S mingw-w64-x86_64-SDL2`
+- **Python 3.8+** (только для recompiler)
 
----
+## Быстрый старт
 
-## ✨ Features
+```cmd
+:: 1. Сгенерировать C-код из ROM + собрать
+mingw32-make recomp ROM=donkeykong.nes GAME=donkeykong
 
-- ✅ **Build without Visual Studio** — MinGW-w64, SDL2, and Python only
-- ✅ **Extended mapper support** — MMC1, UNROM, CNROM, MMC3 (partial)
-- ✅ **Portable builds** — one EXE + ROM = a ready-to-play game
-- ✅ **Automatic stubs** — for unrecognized functions
-- ✅ **Simple Makefile** — `mingw32-make GAME=GameName`
+:: 2. Запустить
+bin\nesrecomp.exe donkeykong.nes
 
----
+:: Или: только собрать (с уже готовым generated/)
+mingw32-make GAME=donkeykong
 
-## 🎮 Supported Games
+:: Stub-билд (без ROM, для проверки компиляции runner)
+mingw32-make
+```
 
-| Game | Mapper | Status |
-|------|--------|--------|
-| Donkey Kong | 0 (NROM) | ✅ Complete |
-| Super Mario Bros. | 0 (NROM) | ✅ Working |
-| Adventure Island | 3 (CNROM) | ✅ Complete |
-| Castlevania | 2 (UNROM) | ✅ Complete |
-| DuckTales | 2 (UNROM) | ✅ Complete |
-| Mega Man | 2 (UNROM) | ✅ Complete |
-| Dragons of Flame | 1 (MMC1) | ✅ Complete |
-| Mega Man 4 | 4 (MMC3) | ⚠️ In Progress |
+## Управление
 
----
+| Клавиша | NES |
+|---------|-----|
+| Z | A |
+| X | B |
+| RShift | Select |
+| Enter | Start |
+| Стрелки | D-pad |
+| Esc | Выход |
 
-## 🚀 Quick Start
+## Структура проекта
 
-### Installing Dependencies (One-Time)
+```
+nesrecomp/
+├── recompiler/
+│   └── nesrecomp.py       ← Python: 6502→C генератор
+├── runner/
+│   ├── include/
+│   │   └── runner.h       ← общий заголовок (CPU, PPU, APU, mapper)
+│   └── src/
+│       ├── memory.c       ← карта памяти NES, контроллеры
+│       ├── ppu.c          ← полная эмуляция PPU 2C02
+│       ├── apu.c          ← APU (pulse, triangle, noise, DMC)
+│       ├── mapper.c       ← mapper 0/1/2/3/4 (NROM/MMC1/UNROM/CNROM/MMC3)
+│       └── runner.c       ← SDL2 окно, game loop, загрузка ROM, main()
+├── generated/
+│   └── stub_full.c        ← заглушка (пока нет ROM)
+├── Makefile               ← mingw32-make
+└── game.cfg.example       ← пример конфига для recompiler
+```
 
-```bash
-# Install MSYS2 from here: https://www.msys2.org/
-# Then in the MSYS2/MinGW64 terminal:
-pacman -S mingw-w64-x86_64-gcc mingw-w64-x86_64-SDL2 make python
+## Поддерживаемые маппера
 
-git clone https://github.com/YOUR_LOGIN/nesrecomp-mingw.git
-cd nesrecomp-mingw
+| Mapper | Название | Покрытие |
+|--------|----------|----------|
+| 0 | NROM | Donkey Kong, Mario Bros, Balloon Fight |
+| 1 | MMC1 | Super Mario Bros 3, Metroid, Mega Man 2 |
+| 2 | UNROM | Mega Man, Castlevania |
+| 3 | CNROM | Gradius, Q*bert |
+| 4 | MMC3 | Super Mario Bros 3 (alt), Kirby's Adventure |
 
-# Place your ROM in the roms/ folder
-# For example: roms/dk.nes
+## Добавление функций вручную
 
-# Build and run
-mingw32-make recomp ROM=roms/dk.nes GAME=DonkeyKong
-bin/nesrecomp.exe roms/dk.nes
+Если у игры есть dispatch-таблица (напр. AI-хендлеры через `JMP ($addr)`),
+добавь адреса в `game.cfg`:
+
+```
+extra_func = E4A0
+extra_func = E502
+```
+
+Затем перезапусти `mingw32-make recomp ROM=... GAME=...`.
+
+## Лицензия
+
+MIT
