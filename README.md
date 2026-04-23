@@ -1,94 +1,57 @@
-# NES Static Recompiler
+# NESRecomp for MinGW 🎮
 
-Converts .nes ROM → C code → native executable on Windows (MinGW).
-**Not an emulator** — each 6502 instruction is translated into C once during compilation.
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![NESRecomp](https://img.shields.io/badge/Base-NESRecomp%20by%20mstan-blue)](https://github.com/mstan/nesrecomp)
 
-```
-game.nes
-↓ python recompiler/nesrecomp.py
-generated/<game>_full.c ← all 6502 functions→C
-generated/<game>_dispatch.c ← call_by_address() + nes_reset/nmi/irq
-↓ mingw32-make GAME=<game>
-bin/nesrecomp.exe
-```
+**Static recompilation of NES games to native code without Visual Studio!**
 
-## Requirements
+This is a fork of [NESRecomp](https://github.com/mstan/nesrecomp), adapted for building with **MinGW-w64** and **Makefile**.
 
-- **MSYS2 / MinGW-w64**
-- `gcc`, `mingw32-make`
-- **SDL2** for MinGW: `pacman -S mingw-w64-x86_64-SDL2`
-- **Python 3.8+** (for recompiler only)
+> **All adaptation work was done in dialogue with Claude AI (Anthropic).**
+> The code is completely open source. Doesn't require Visual Studio.
 
-## Quick Start
+---
 
-``cmd
-:: 1. Generate C code from ROM + Build
-mingw32-make recomp ROM=donkeykong.nes GAME=donkeykong
+## ✨ Features
 
-:: 2. Run
-bin\nesrecomp.exe donkeykong.nes
+- ✅ **Build without Visual Studio** — MinGW-w64, SDL2, and Python only
+- ✅ **Extended mapper support** — MMC1, UNROM, CNROM, MMC3 (partial)
+- ✅ **Portable builds** — one EXE + ROM = a ready-to-play game
+- ✅ **Automatic stubs** — for unrecognized functions
+- ✅ **Simple Makefile** — `mingw32-make GAME=GameName`
 
-:: Or: just build (with the generated/)
-mingw32-make GAME=donkeykong
+---
 
-:: Stub build (without ROM, to test runner compilation)
-mingw32-make
-```
+## 🎮 Supported Games
 
-## Controls
+| Game | Mapper | Status |
+|------|--------|--------|
+| Donkey Kong | 0 (NROM) | ✅ Complete |
+| Super Mario Bros. | 0 (NROM) | ✅ Working |
+| Adventure Island | 3 (CNROM) | ✅ Complete |
+| Castlevania | 2 (UNROM) | ✅ Complete |
+| DuckTales | 2 (UNROM) | ✅ Complete |
+| Mega Man | 2 (UNROM) | ✅ Complete |
+| Dragons of Flame | 1 (MMC1) | ✅ Complete |
+| Mega Man 4 | 4 (MMC3) | ⚠️ In Progress |
 
-| Key | NES |
-|---------|-----|
-| Z | A |
-| X | B |
-| RShift | Select |
-| Enter | Start |
-| Arrows | D-pad |
-| Esc | Exit |
+---
 
-## Project Structure
+## 🚀 Quick Start
 
-```
-nesrecomp/
-├── recompiler/
-│ └── nesrecomp.py ← Python: 6502→C generator
-├── runner/
-│ ├── include/
-│ │ └── runner.h ← common header (CPU, PPU, APU, mapper)
-│ └── src/
-│ ├── memory.c ← NES memory map, controllers
-│ ├── ppu.c ← full PPU 2C02 emulation
-│ ├── apu.c ← APU (pulse, triangle, noise, DMC)
-│ ├── mapper.c ← mapper 0/1/2/3/4 (NROM/MMC1/UNROM/CNROM/MMC3)
-│ └── runner.c ← SDL2 window, game loop, ROM loading, main()
-├── generated/
-│ └── stub_full.c ← stub (no ROM yet)
-├── Makefile ← mingw32-make
-└── game.cfg.example ← example config for recompiler
-```
+### Installing Dependencies (One-Time)
 
-## Supported mappers
+```bash
+# Install MSYS2 from here: https://www.msys2.org/
+# Then in the MSYS2/MinGW64 terminal:
+pacman -S mingw-w64-x86_64-gcc mingw-w64-x86_64-SDL2 make python
 
-| Mapper | Name | Coverage |
-|--------|----------|----------|
-| 0 | NROM | Donkey Kong, Mario Bros, Balloon Fight |
-| 1 | MMC1 | Super Mario Bros 3, Metroid, Mega Man 2 |
-| 2 | UNROM | Mega Man, Castlevania |
-| 3 | CNROM | Gradius, Q*bert |
-| 4 | MMC3 | Super Mario Bros 3 (alt), Kirby's Adventure |
+git clone https://github.com/YOUR_LOGIN/nesrecomp-mingw.git
+cd nesrecomp-mingw
 
-## Adding Functions Manually
+# Place your ROM in the roms/ folder
+# For example: roms/dk.nes
 
-If the game has a dispatch table (e.g., AI handlers via `JMP ($addr)`),
-add the addresses to `game.cfg`:
-
-```
-extra_func = E4A0
-extra_func = E502
-```
-
-Затем перезапусти `mingw32-make recomp ROM=... GAME=...`.
-
-## Лицензия
-
-MIT
+# Build and run
+mingw32-make recomp ROM=roms/dk.nes GAME=DonkeyKong
+bin/nesrecomp.exe roms/dk.nes
