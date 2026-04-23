@@ -46,12 +46,12 @@ This is a fork of [NESRecomp](https://github.com/mstan/nesrecomp), adapted for b
 # Then in the MSYS2/MinGW64 terminal:
 pacman -S mingw-w64-x86_64-gcc mingw-w64-x86_64-SDL2 make python
 
-git clone https://github.com/ВАШ_ЛОГИН/nesrecomp-mingw.git
+git clone https://github.com/YOUR_LOGIN/nesrecomp-mingw.git
 cd nesrecomp-mingw
 
-# Положите ваш ROM в папку roms/
-# Например: roms/dk.nes
+# Place your ROM in the roms/ folder
+# For example: roms/dk.nes
 
-# Соберите и запустите
+# Build and run
 mingw32-make recomp ROM=roms/dk.nes GAME=DonkeyKong
 bin/nesrecomp.exe roms/dk.nes
