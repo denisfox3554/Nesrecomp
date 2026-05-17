@@ -1,4 +1,8 @@
-#include "runner.h"
+/* ppu: PPU + mapper (CHR) + прерывания */
+#include "ppu.h"
+#include "mapper.h"
+#include "interrupts.h"
+#include <stdio.h>
 
 PPU ppu;
 
@@ -33,13 +37,11 @@ static const uint32_t PALETTE[64] = {
 static uint16_t mirror_nt(uint16_t addr) {
     addr &= 0x0FFF;
     switch (mapper.mirroring) {
-    case 0: /* horizontal: $2000=$2400, $2800=$2C00 */
-        return (addr & 0x03FF) | ((addr >= 0x0800) ? 0x0400 : 0);
-    case 1: /* vertical: $2000=$2800, $2400=$2C00 */
-        return addr & 0x07FF;
-    case 2: return addr & 0x0FFF;      /* 4-screen */
-    case 3: return addr & 0x03FF;      /* single lower */
-    case 4: return 0x0400|(addr&0x03FF); /* single upper */
+    case 0: return (addr & 0x03FF) | ((addr >= 0x0800) ? 0x0400 : 0);
+    case 1: return addr & 0x07FF;
+    case 2: return addr & 0x0FFF;
+    case 3: return addr & 0x03FF;
+    case 4: return 0x0400|(addr&0x03FF);
     }
     return addr & 0x03FF;
 }
@@ -69,23 +71,22 @@ static void vram_write(uint16_t addr, uint8_t val) {
    ========================================================================= */
 uint8_t ppu_read(uint8_t reg) {
     switch (reg & 7) {
-    case 2: { /* PPUSTATUS */
+    case 2: {
         uint8_t s = (ppu.regs[2] & 0xE0) | (ppu.open_bus & 0x1F);
-        /* FIX: чтение $2002 подавляет NMI если оно ещё не было отправлено */
         ppu.nmi_suppressed = 1;
-        ppu.regs[2] &= ~0x80;  /* clear VBL flag */
+        ppu.regs[2] &= ~0x80;
         ppu.write_toggle = 0;
         return s;
     }
-    case 4: return ppu.oam[ppu.regs[3]]; /* OAMDATA */
-    case 7: { /* PPUDATA */
+    case 4: return ppu.oam[ppu.regs[3]];
+    case 7: {
         uint16_t a = ppu.v_addr & 0x3FFF;
         uint8_t val;
         if (a < 0x3F00) {
             val = ppu.data_buf;
             ppu.data_buf = vram_read(a);
         } else {
-            ppu.data_buf = vram_read(a & 0x2FFF); /* nametable behind palette */
+            ppu.data_buf = vram_read(a & 0x2FFF);
             val = vram_read(a);
         }
         ppu.v_addr = (ppu.v_addr + ((ppu.regs[0] & 4) ? 32 : 1)) & 0x7FFF;
@@ -99,17 +100,16 @@ void ppu_write(uint8_t reg, uint8_t val) {
     ppu.open_bus = val;
     ppu.regs[reg & 7] = val;
     switch (reg & 7) {
-    case 0: /* PPUCTRL */
+    case 0:
         ppu.t_addr = (ppu.t_addr & ~0x0C00) | ((uint16_t)(val & 3) << 10);
-        /* FIX: если NMI_EN включился и VBL уже установлен — генерировать NMI */
         if ((val & 0x80) && (ppu.regs[2] & 0x80))
             nes_nmi();
         break;
-    case 3: break; /* OAMADDR */
-    case 4: /* OAMDATA */
+    case 3: break;
+    case 4:
         ppu.oam[ppu.regs[3]++] = val;
         break;
-    case 5: /* PPUSCROLL */
+    case 5:
         if (!ppu.write_toggle) {
             ppu.t_addr = (ppu.t_addr & ~0x001F) | (val >> 3);
             ppu.fine_x = val & 7;
@@ -120,7 +120,7 @@ void ppu_write(uint8_t reg, uint8_t val) {
         }
         ppu.write_toggle ^= 1;
         break;
-    case 6: /* PPUADDR */
+    case 6:
         if (!ppu.write_toggle) {
             ppu.t_addr = (ppu.t_addr & 0x00FF) | ((uint16_t)(val & 0x3F) << 8);
         } else {
@@ -129,7 +129,7 @@ void ppu_write(uint8_t reg, uint8_t val) {
         }
         ppu.write_toggle ^= 1;
         break;
-    case 7: /* PPUDATA */
+    case 7:
         vram_write(ppu.v_addr, val);
         ppu.v_addr = (ppu.v_addr + ((ppu.regs[0] & 4) ? 32 : 1)) & 0x7FFF;
         break;
@@ -154,9 +154,9 @@ static inline void inc_vert_v(void) {
     } else {
         ppu.v_addr &= ~0x7000;
         int y = (ppu.v_addr >> 5) & 31;
-        if      (y == 29) { y = 0; ppu.v_addr ^= 0x0800; }
-        else if (y == 31)   y = 0;
-        else                y++;
+        if (y == 29) { y = 0; ppu.v_addr ^= 0x0800; }
+        else if (y == 31) y = 0;
+        else y++;
         ppu.v_addr = (ppu.v_addr & ~0x03E0) | (y << 5);
     }
 }
@@ -171,8 +171,6 @@ static inline void copy_vert_v(void) {
 
 /* =========================================================================
    Background tile fetch
-   Загружает тайл в НИЖНИЙ байт shifter'ов.
-   Вызывается каждые 8 dot во время fetch-периодов.
    ========================================================================= */
 static void fetch_bg_tile(void) {
     uint16_t nt_addr = 0x2000 | (ppu.v_addr & 0x0FFF);
@@ -198,8 +196,7 @@ static void fetch_bg_tile(void) {
 }
 
 /* =========================================================================
-   Sprite evaluation — строим список до 8 спрайтов для следующего scanline
-   FIX: сохраняем результат в sp_next_* и применяем на следующем scanline
+   Sprite evaluation
    ========================================================================= */
 static void eval_sprites(int scanline) {
     ppu.sprite_count    = 0;
@@ -232,7 +229,6 @@ static void eval_sprites(int scanline) {
         uint8_t lo = vram_read(pt_base + (uint16_t)t * 16 + row);
         uint8_t hi = vram_read(pt_base + (uint16_t)t * 16 + row + 8);
 
-        /* Horizontal flip */
         if (attr & 0x40) {
             lo = (uint8_t)(((lo * 0x80200802ULL) & 0x0884422110ULL) * 0x0101010101ULL >> 32);
             hi = (uint8_t)(((hi * 0x80200802ULL) & 0x0884422110ULL) * 0x0101010101ULL >> 32);
@@ -246,9 +242,6 @@ static void eval_sprites(int scanline) {
     }
 }
 
-/* =========================================================================
-   PPU step — один dot (pixel clock)
-   ========================================================================= */
 /* =========================================================================
    PPU step — один dot (pixel clock)
    ========================================================================= */
@@ -268,7 +261,6 @@ void ppu_step(void) {
         if (dot >= 1 && dot <= 256) {
             int x = dot - 1;
 
-            /* BG pixel */
             uint8_t bg_pixel = 0, bg_pal = 0;
             if (BG_EN && (x >= 8 || (ppu.regs[1] & 0x02))) {
                 uint16_t mux = 0x8000 >> ppu.fine_x;
@@ -278,7 +270,6 @@ void ppu_step(void) {
                          | ((ppu.bg_pal_hi & mux) ? 2 : 0);
             }
 
-            /* Sprite pixel */
             uint8_t sp_pixel = 0, sp_pal = 0, sp_priority = 0;
             if (SP_EN && (x >= 8 || (ppu.regs[1] & 0x04))) {
                 for (int i = 0; i < ppu.sprite_count; i++) {
@@ -288,7 +279,6 @@ void ppu_step(void) {
                     uint8_t hi = (ppu.sp_pattern_hi[i] >> (7 - sx)) & 1;
                     uint8_t p  = lo | (hi << 1);
                     if (!p) continue;
-                    /* Sprite-zero hit */
                     if (i == 0 && ppu.sp_zero_on_line && bg_pixel && x < 255)
                         ppu.regs[2] |= 0x40;
                     sp_pixel    = p;
@@ -298,7 +288,6 @@ void ppu_step(void) {
                 }
             }
 
-            /* Mux & palette lookup */
             uint8_t pal_addr;
             if      (!bg_pixel && !sp_pixel) pal_addr = 0;
             else if (!bg_pixel &&  sp_pixel) pal_addr = sp_pal  * 4 + sp_pixel;
@@ -310,7 +299,6 @@ void ppu_step(void) {
             uint8_t color = vram_read(0x3F00 + pal_addr);
             ppu.framebuf[scanline * SCREEN_W + x] = PALETTE[color & 0x3F];
 
-            /* Shift BG shifters */
             ppu.bg_lo     <<= 1; ppu.bg_hi     <<= 1;
             ppu.bg_pal_lo <<= 1; ppu.bg_pal_hi <<= 1;
         }
@@ -327,7 +315,6 @@ void ppu_step(void) {
             if (dot == 337) { fetch_bg_tile(); inc_hori_v(); }
         }
 
-        /* Sprite evaluation */
         if (dot == 257)
             eval_sprites(scanline + 1 < 240 ? scanline + 1 : 0);
     }
@@ -353,8 +340,7 @@ void ppu_step(void) {
         ppu.regs[2] |= 0x80;
         ppu.frame_ready = 1;
         ppu.nmi_suppressed = 0;
-        if (NMI_EN && !ppu.nmi_suppressed)
-            nes_nmi();
+        if (NMI_EN) nes_nmi();
     }
 
     /* ---- Advance dot / scanline ---- */
@@ -363,10 +349,8 @@ void ppu_step(void) {
         ppu.cycle = 0;
         ppu.scanline++;
         
-        /* MMC3 IRQ — при переходе на каждый новый scanline 0-239.
-           Вызывается ПОСЛЕ инкремента, когда ppu.scanline = новое значение.
-           IRQ срабатывает при рендеринге видимых строк (0-239). */
-        if (RENDER && ppu.scanline <= 240) {
+        /* MMC3 Scanline IRQ — КРИТИЧНО ДЛЯ SMB3! */
+        if (RENDER) {
             mapper_scanline();
         }
         
