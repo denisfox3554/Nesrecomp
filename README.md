@@ -49,6 +49,7 @@ Fixing mappers and bugs
 | FElix the cat|        | ✅ Complete |
 
 ---
+https://github.com/denisfox3554/Nesrecomp/blob/main/linux.png
 
 ## 🚀 Quick Start
 
