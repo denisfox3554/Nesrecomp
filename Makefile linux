@@ -2,11 +2,9 @@ CC = gcc
 
 UNAME_S := $(shell uname -s)
 
-CFLAGS = -O2 -Wall -Wextra \
-         -Wno-unused-parameter \
-         -Wno-unused-variable \
-         -Irunner/include \
-         $(shell sdl2-config --cflags)
+GAME    ?= stub
+BINDIR  = bin
+OBJDIR  = build
 
 ifeq ($(UNAME_S),Linux)
 
@@ -16,15 +14,39 @@ ifeq ($(UNAME_S),Linux)
 
 else
 
+    TARGET = $(BINDIR)/nesrecomp.exe
 
     LDFLAGS = $(shell sdl2-config --libs 2>NUL || echo -L/mingw64/lib -lSDL2main -lSDL2) \
                -lmingw32 -lm
 
 endif
 
+CFLAGS = -O2 -Wall -Wextra \
+         -Wno-unused-parameter \
+         -Wno-unused-variable \
+         -Irunner/include \
+         $(shell sdl2-config --cflags)
+
+RUNNER_SRCS = \
+    runner/src/memory.c \
+    runner/src/cpu_interp.c \
+    runner/src/ppu.c \
+    runner/src/apu.c \
+    runner/src/mapper.c \
+    runner/src/runner.c
+
+FULL_SRC     = generated/$(GAME)_full.c
+DISPATCH_SRC = generated/$(GAME)_dispatch.c
+
+ifeq ($(wildcard $(DISPATCH_SRC)),)
+    GAME_SRCS = $(FULL_SRC)
+else
+    GAME_SRCS = $(FULL_SRC) $(DISPATCH_SRC)
+endif
+
 ALL_SRCS = $(RUNNER_SRCS) $(GAME_SRCS)
-OBJDIR   = build
-OBJS     = $(patsubst %.c,$(OBJDIR)/%.o,$(ALL_SRCS))
+
+OBJS = $(patsubst %.c,$(OBJDIR)/%.o,$(ALL_SRCS))
 
 .PHONY: all clean recomp dirs
 
@@ -36,14 +58,14 @@ $(TARGET): $(OBJS)
 	@echo Build successful: $@
 
 $(OBJDIR)/%.o: %.c
-	@if not exist "$(subst /,\,$(dir $@))" mkdir "$(subst /,\,$(dir $@))"
+	@mkdir -p $(dir $@)
 	@echo [CC] $<
 	$(CC) $(CFLAGS) -c $< -o $@
 
 dirs:
-	@if not exist $(BINDIR) mkdir $(BINDIR)
-	@if not exist $(OBJDIR) mkdir $(OBJDIR)
-	@if not exist generated mkdir generated
+	@mkdir -p $(BINDIR)
+	@mkdir -p $(OBJDIR)
+	@mkdir -p generated
 
 recomp:
 ifndef ROM
@@ -52,10 +74,10 @@ endif
 ifndef GAME
 	$(error GAME not set)
 endif
-	python recompiler/nesrecomp.py $(ROM) --out generated --game $(GAME)
+	python3 recompiler/nesrecomp.py $(ROM) --out generated --game $(GAME)
 	$(MAKE) GAME=$(GAME)
 
 clean:
-	@if exist $(OBJDIR) rmdir /S /Q $(OBJDIR)
-	@if exist $(BINDIR) rmdir /S /Q $(BINDIR)
+	rm -rf $(OBJDIR)
+	rm -rf $(BINDIR)
 	@echo Cleaned.
