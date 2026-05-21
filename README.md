@@ -19,10 +19,10 @@ This is a fork of [NESRecomp](https://github.com/mstan/nesrecomp), adapted for b
 - ✅ **Portable builds** — one EXE + ROM = a ready-to-play game
 - ✅ **Automatic stubs** — for unrecognized functions
 - ✅ **Simple Makefile** — `mingw32-make GAME=GameName`
-- ✅ **Fullscreen with keyboard F11 **
-- ✅ **WIDESCREEN keyboard TAB **
-- ✅ **F5 save game **
-- ✅ **F8 load save game **
+- ✅ **Fullscreen with keyboard F11**
+- ✅ **WIDESCREEN keyboard TAB**
+- ✅ **F5 save game**
+- ✅ **F8 load save game**
 
 ---
 
