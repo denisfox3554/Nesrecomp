@@ -25,13 +25,13 @@ This is a fork of [NESRecomp](https://github.com/mstan/nesrecomp), adapted for b
 - ✅ **F8 load save game**
 
 
-Next Features:
-**CRT**
-**turbo mode**
-**menu UX**
-**gamepad support**
-**ADDING mappers**
-**Fixing mappers and bugs**
+## Next Features:
+CRT
+turbo mode
+menu UX
+gamepad support
+ADDING mappers
+Fixing mappers and bugs
 ---
 
 ## 🎮 Supported Games
