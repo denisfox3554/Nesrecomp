@@ -1,24 +1,33 @@
 # ============================================================
-#  NES Static Recompiler — Makefile for MinGW (mingw32-make)
-#  Usage:
-#    mingw32-make           — build with stub (no ROM)
-#    mingw32-make GAME=mygame — build with generated/mygame_full.c
-#    mingw32-make recomp ROM=game.nes GAME=mygame — run recompiler then build
-#    mingw32-make clean
+#  NES Recomp — Makefile
+#  Linux:   make
+#  Windows: mingw32-make
 # ============================================================
 
-CC      = gcc
-CFLAGS  = -O2 -Wall -Wextra -Wno-unused-parameter \
-           -Irunner/include \
-           $(shell sdl2-config --cflags 2>NUL || echo -I$(MSYS2_PREFIX)/include/SDL2 -DSDL_MAIN_HANDLED)
-LDFLAGS = $(shell sdl2-config --libs 2>NUL || echo -L$(MSYS2_PREFIX)/lib -lSDL2main -lSDL2) \
-           -lmingw32 -mwindows
-# For a console window (debug), replace -mwindows with -mconsole
+CC     = gcc
+CFLAGS = -O2 -Wall -Wno-unused-parameter -Wno-unused-variable \
+         -Wno-unused-result \
+         -Irunner/include \
+         $(shell sdl2-config --cflags 2>/dev/null || echo -I/usr/include/SDL2)
 
-BINDIR  = bin
-TARGET  = $(BINDIR)/nesrecomp.exe
+LDFLAGS = $(shell sdl2-config --libs 2>/dev/null || echo -lSDL2) -lm
 
-RUNNER_SRCS = \
+# Windows: добавляем mingw32
+ifeq ($(OS),Windows_NT)
+    LDFLAGS  += -lmingw32 -mwindows
+    EXE       = bin/nesrecomp.exe
+    RM        = del /Q /S
+    MKDIRP    = if not exist "$1" mkdir "$1"
+else
+    EXE       = bin/nesrecomp
+    RM        = rm -rf
+    MKDIRP    = mkdir -p $1
+endif
+
+GAME  ?= stub
+TARGET = $(EXE)
+
+SRCS = \
     runner/src/memory.c \
     runner/src/cpu_interp.c \
     runner/src/ppu.c \
@@ -26,66 +35,60 @@ RUNNER_SRCS = \
     runner/src/mapper.c \
     runner/src/runner.c
 
-# Game generated code — override GAME= to use your game
-GAME ?= stub
+FULL = generated/$(GAME)_full.c
+DISP = generated/$(GAME)_dispatch.c
 
-FULL_SRC     = generated/$(GAME)_full.c
-DISPATCH_SRC = generated/$(GAME)_dispatch.c
-
-# If dispatch file exists, use it; otherwise fall back to stub
-ifeq ($(wildcard $(DISPATCH_SRC)),)
-    GAME_SRCS = $(FULL_SRC)
+ifeq ($(wildcard $(DISP)),)
+    GSRCS = $(FULL)
 else
-    GAME_SRCS = $(FULL_SRC) $(DISPATCH_SRC)
+    GSRCS = $(FULL) $(DISP)
 endif
 
-ALL_SRCS = $(RUNNER_SRCS) $(GAME_SRCS)
-
-# Object files go into build/
 OBJDIR = build
-OBJS   = $(patsubst %.c,$(OBJDIR)/%.o,$(ALL_SRCS))
+OBJS   = $(patsubst %.c,$(OBJDIR)/%.o,$(SRCS) $(GSRCS))
 
-# ============================================================
-#  Targets
-# ============================================================
-
-.PHONY: all clean recomp dirs
+# ─────────────────────────────────────────
+.PHONY: all clean recomp run install-deps
 
 all: dirs $(TARGET)
+	@echo ""
+	@echo "=== Build OK: $(TARGET) ==="
+	@echo "Usage: $(TARGET) roms/game.nes"
 
 $(TARGET): $(OBJS)
-	@echo [LINK] $@
 	$(CC) $(OBJS) -o $@ $(LDFLAGS)
-	@echo Build successful: $@
 
 $(OBJDIR)/%.o: %.c
-	@if not exist "$(subst /,\,$(dir $@))" mkdir "$(subst /,\,$(dir $@))"
+	@mkdir -p $(dir $@)
 	@echo [CC] $<
-	$(CC) $(CFLAGS) -c $< -o $@
+	@$(CC) $(CFLAGS) -c $< -o $@
 
 dirs:
-	@if not exist $(BINDIR) mkdir $(BINDIR)
-	@if not exist $(OBJDIR) mkdir $(OBJDIR)
-	@if not exist generated  mkdir generated
+	@mkdir -p bin build generated roms
 
-# ============================================================
-#  Run the Python recompiler, then build
-# ============================================================
+# ─── Зависимости (Linux) ─────────────────
+install-deps:
+	@echo "Installing dependencies..."
+	sudo apt-get install -y gcc libsdl2-dev make python3 git
+
+# ─── Recompile ROM → C → exe ─────────────
 recomp:
 ifndef ROM
-	$(error ROM is not set. Use: mingw32-make recomp ROM=game.nes GAME=mygame)
+	$(error Usage: make recomp ROM=roms/game.nes GAME=GameName)
 endif
 ifndef GAME
-	$(error GAME is not set. Use: mingw32-make recomp ROM=game.nes GAME=mygame)
+	$(error Usage: make recomp ROM=roms/game.nes GAME=GameName)
 endif
-	@echo [RECOMP] $(ROM) -> generated/$(GAME)_full.c
-	python recompiler/nesrecomp.py $(ROM) --out generated --game $(GAME)
+	python3 recompiler/nesrecomp.py "$(ROM)" --out generated --game $(GAME)
 	$(MAKE) GAME=$(GAME)
 
-# ============================================================
-#  Clean
-# ============================================================
+# ─── Быстрый запуск ──────────────────────
+run: all
+ifndef ROM
+	$(error Usage: make run ROM=roms/game.nes)
+endif
+	$(TARGET) "$(ROM)"
+
 clean:
-	@if exist $(OBJDIR) rmdir /S /Q $(OBJDIR)
-	@if exist $(BINDIR) rmdir /S /Q $(BINDIR)
+	$(RM) build bin
 	@echo Cleaned.
